@@ -1,25 +1,34 @@
-import logo from './logo.svg';
-import './App.css';
+import Grid from './grid';
+import el from './el';
+
+const Card = el.div`w-full h-full bg-gray`;
 
 function App() {
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
-  );
+    const items = [
+        {
+            id: 'a',
+            rows: [1, 2],
+            cols: [0, 1],
+            children: <Card />,
+        },
+        {
+            id: 'b',
+            rows: [0, 2],
+            cols: [1, 2],
+            children: <Card />,
+        },
+    ];
+
+    return (
+        <div>
+            <Grid
+                row={5}
+                cols={5}
+                items={items}
+                className="w-screen h-screen"
+            />
+        </div>
+    );
 }
 
 export default App;
