@@ -19,6 +19,7 @@ export function getAxisOffset(start, width, gap) {
 
 export function getPlacementOnAxis(axis, colWidth, gap) {
     const [start, span] = parseAxis(axis);
+
     return [
         getAxisOffset(start, colWidth, gap),
         getAxisSize(span, colWidth, gap),
