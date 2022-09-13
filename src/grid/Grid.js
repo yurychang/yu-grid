@@ -1,6 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import classNames from 'classnames';
-import { getItemContentSize, getPlacementOnAxis } from './helpers';
+import {
+    getAxisOffset,
+    getItemContentSize,
+    getPlacementOnAxis,
+} from './helpers';
 
 /**
  * Grid
@@ -21,7 +25,6 @@ const Grid = ({
     className,
 }) => {
     const containerRef = useRef();
-    const prevDragEv = useRef();
 
     const items = useMemo(
         () =>
@@ -41,6 +44,11 @@ const Grid = ({
     );
 
     const [gridItems, setGridItems] = useState(items);
+
+    const [gridSize, setGridSize] = useState({
+        colWidth: 0,
+        rowHeight: _rowHeight,
+    });
 
     useEffect(() => {
         function updateItemPlacement() {
@@ -77,6 +85,7 @@ const Grid = ({
                 };
             });
 
+            setGridSize({ colWidth, rowHeight });
             setGridItems(newItems);
         }
 
@@ -87,39 +96,67 @@ const Grid = ({
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [_rowHeight, cols[0], cols[1], rows[0], rows[1], gap, items]);
 
+    const dragStartEv = useRef();
+    const dragItem = useRef();
+
     const dragStart = (id) => (e) => {
         e.dataTransfer.setData('id', id);
         e.dataTransfer.setDragImage(document.createElement('div'), 0, 0);
-        prevDragEv.current = e;
+        dragStartEv.current = e;
 
-        setGridItems((gridItems) =>
-            gridItems.map((item) => {
-                if (item.id === id) {
-                    return {
-                        ...item,
-                        zIndex: 9999,
-                    };
-                }
-                return item;
-            })
-        );
+        setGridItems((gridItems) => {
+            let target;
+
+            const newGridItems = gridItems
+                .filter((item) => item.id !== 'temp')
+                .map((item) => {
+                    if (item.id === id) {
+                        target = gridItems.find((item) => item.id === id);
+                        dragItem.current = item;
+                        return {
+                            ...item,
+                            zIndex: 9999,
+                        };
+                    }
+                    return item;
+                });
+
+            const tempItem = createTempItem(target);
+
+            return [...newGridItems, tempItem];
+        });
     };
 
     const drag = (id) => (e) => {
-        const movementX = e.pageX - prevDragEv.current.pageX;
-        const movementY = e.pageY - prevDragEv.current.pageY;
-        prevDragEv.current = e;
+        const movementX = e.pageX - dragStartEv.current.pageX;
+        const movementY = e.pageY - dragStartEv.current.pageY;
+        const target = dragItem.current;
+        const targetX = target.x + movementX;
+        const targetY = target.y + movementY;
 
         setGridItems((gridItems) =>
             gridItems.map((item) => {
-                if (item.id === id) {
-                    return {
-                        ...item,
-                        x: item.x + movementX,
-                        y: item.y + movementY,
-                    };
+                switch (item.id) {
+                    case id:
+                        return {
+                            ...item,
+                            x: targetX,
+                            y: targetY,
+                        };
+
+                    case 'temp':
+                        const [x, y] = calcFitPosition({
+                            x: targetX + gridSize.colWidth / 2,
+                            y: targetY + gridSize.rowHeight / 2,
+                            ...gridSize,
+                            gap,
+                        });
+
+                        return { ...item, x, y };
+
+                    default:
+                        return item;
                 }
-                return item;
             })
         );
     };
@@ -130,12 +167,32 @@ const Grid = ({
 
     const drop = (e) => {
         e.preventDefault();
+        const targetId = e.dataTransfer.getData('id');
 
         setGridItems((gridItems) =>
-            gridItems.map((item) => ({
-                ...item,
-                zIndex: 1,
-            }))
+            gridItems
+                .filter((item) => item.id !== 'temp')
+                .map((item) => {
+                    if (item.id === targetId) {
+                        const [x, y] = calcFitPosition({
+                            x: item.x + gridSize.colWidth / 2,
+                            y: item.y + gridSize.rowHeight / 2,
+                            ...gridSize,
+                            gap,
+                        });
+                        return {
+                            ...item,
+                            x,
+                            y,
+                            zIndex: 1,
+                        };
+                    } else {
+                        return {
+                            ...item,
+                            zIndex: 1,
+                        };
+                    }
+                })
         );
     };
 
@@ -155,12 +212,48 @@ const Grid = ({
             onDragOver={dragOver}
             onDrop={drop}
             style={{ width, height }}
-            className={classNames('relative', className)}
+            className={classNames('relative overflow-hidden', className)}
         >
             {gridContent}
         </div>
     );
 };
+
+function createTempItem(source) {
+    return {
+        id: 'temp',
+        show: true,
+        x: source.x,
+        y: source.y,
+        width: source.width,
+        height: source.height,
+        zIndex: 9000,
+        meta: {},
+        children: (
+            <div className="w-full h-full border-2 border-dashed border-gray-500"></div>
+        ),
+    };
+}
+
+function calcFitPosition({ x, y, colWidth, rowHeight, gap }) {
+    let startCol = 1;
+    while (x > startCol * (colWidth + gap) - gap / 2) {
+        startCol += 1;
+    }
+
+    let startRow = 1;
+    while (y > startRow * (rowHeight + gap) - gap / 2) {
+        startRow += 1;
+    }
+
+    const xStartLine = startCol - 1;
+    const yStartLine = startRow - 1;
+
+    return [
+        getAxisOffset(xStartLine, colWidth, gap),
+        getAxisOffset(yStartLine, rowHeight, gap),
+    ];
+}
 
 const GridItem = React.memo(
     ({
